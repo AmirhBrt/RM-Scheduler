@@ -41,7 +41,7 @@ class Job:
         Returns:
             str: The primary key.
         """
-        return f'{self.task.pk} | {self.arrival}'
+        return f'{self.task.pk}-{self.deadline} | {self.arrival}'
 
     @property
     def deadline(self):

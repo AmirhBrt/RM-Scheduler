@@ -110,17 +110,57 @@ class RMScheduler(BaseScheduler):
         return n * (2 ** (1 / n) - 1)
 
     @staticmethod
-    def get_arrived_jobs(sorted_jobs: list[Job], now: float):
+    def get_job(queue: list[Job], now: float) -> Job | None:
+        """
+        Get the next job to execute from the queue.
+
+        Args:
+            queue (list[Job]): The list of jobs.
+            now (int): The current time.
+
+        Returns:
+            Job: The next task to execute.
+
+        Raises:
+            ValueError: when a job is not done until its deadline.
+        """
         arrived_jobs: list[Job] = []
-        for job in sorted_jobs:
+        for job in queue:
             if job.arrival > now:
                 break
             arrived_jobs.append(job)
-        arrived_jobs.sort(key=lambda j: j.task.period)
-        return arrived_jobs
+        for job in arrived_jobs:
+            if job.deadline < now and not job.is_done():
+                raise ValueError
+        arrived_jobs.sort(key=lambda _: _.task.period)
+        for j in arrived_jobs:
+            print(j)
+        try:
+            return arrived_jobs.pop(0)
+        except IndexError:
+            return None
 
     @staticmethod
-    def get_task_exec_time(queue: list[Job], job: Job, now: int) -> int:
+    def idle_cpu_until_next_job_arrives(queue: list[Job], now: int) -> int:
+        """
+        Handle the CPU being idle until the next job arrives.
+
+        Args:
+            queue (list[Job]): The list of jobs.
+            now (int): The current time.
+
+        Returns:
+            int: The updated time after the CPU idle period.
+        """
+        next_arrival = min([t.arrival for t in queue])
+        idle_time = next_arrival - now
+        logger.info(f'CPU IS GOING IDLE FOR {idle_time}s UNTIL NEXT TASK ARRIVES')
+        time.sleep(idle_time)
+        now += idle_time
+        return now
+
+    @staticmethod
+    def get_job_exec_time(queue: list[Job], job: Job, now: int) -> int:
         """
         Get the execution time for a job, considering higher priority jobs.
 
@@ -143,37 +183,65 @@ class RMScheduler(BaseScheduler):
             exec_time = job.left_execution
         return exec_time
 
-    def is_feasible(self) -> bool:
+    @staticmethod
+    def execute_task(exec_time: int, job: Job, now: int) -> int:
+        """
+        Execute a job for the given execution time.
+
+        Args:
+            exec_time (int): The execution time.
+            job (Job): The job to execute.
+            now (int): The current time.
+
+        Returns:
+            int: The updated time after job execution.
+        """
+        job.compute(exec_time)
+        now += exec_time
+        return now
+
+    def is_feasible(self, log=True) -> bool:
         utilization_sum = sum(task.utility for task in self.tasks)
         if utilization_sum < self.utilization_lub():
-            logger.info('TASKS ARE SCHEDULABLE DUE TO LEAST UPPER BOUND!')
+            if log:
+                logger.info('TASKS ARE SCHEDULABLE DUE TO LEAST UPPER BOUND!')
             return True
         elif utilization_sum >= 1:
-            logger.error('TASKS ARE NOT SCHEDULABLE!')
+            if log:
+                logger.error('TASKS ARE NOT SCHEDULABLE!')
             return False
-        logger.info('TASKS MIGHT BE SCHEDULABLE WITH RM SCHEDULER BUT NOT SURE!')
+        if log:
+            logger.info('TASKS MIGHT BE SCHEDULABLE WITH RM SCHEDULER BUT NOT SURE!')
         return True
 
     def schedule(self) -> None:
-        hyper_period = self.get_hyper_period()
-        jobs = list(self.jobs)
-        jobs.sort(key=lambda j: j.arrival)
+        """
+        Schedule the jobs using the EDF algorithm in a hyper-period.
 
-        start_time = time.time()
-        while jobs:
-            now = time.time()
-            if round(now - start_time) > hyper_period:
-                raise ValueError
-            arrived_jobs = self.get_arrived_jobs(
-                jobs, round(now - start_time)
+        Returns:
+            None
+        """
+        if not self.is_feasible(log=False):
+            logger.error('TASKS ARE NOT SCHEDULABLE ACCORDING TO THE GIVEN CONFIG!')
+            return
+
+        queue = sorted(list(self.jobs), key=lambda _: _.arrival)
+        now = 0
+        while queue:
+            logger.info(f'NOW = {now}')
+            job = self.get_job(queue, now)
+            if job is None:
+                now = self.idle_cpu_until_next_job_arrives(queue, now)
+                continue
+            queue.remove(job)
+            exec_time = self.get_job_exec_time(queue, job, now)
+            logger.info(f'EXECUTING TASK {job.pk} FOR {exec_time}s...')
+            now = self.execute_task(
+                exec_time=exec_time,
+                job=job,
+                now=now
             )
-            job = arrived_jobs.pop(0)
-            jobs.remove(job)
-
-            exec_time = self.get_task_exec_time(jobs, job, round(now - start_time))
-            logger.info(f'EXECUTING JOB {job.pk} FOR {exec_time}s...')
-            job.compute(exec_time)
-            if len(jobs) > 0:
-                if job.left_execution > 0:
-                    jobs.append(job)
-                    jobs = sorted(jobs, key=lambda j: j.arrival)
+            if job.left_execution > 0:
+                queue.append(job)
+                queue.sort(key=lambda _: _.arrival)
+        logger.info(f'ENDED AT : {now}')

@@ -45,6 +45,7 @@ def test_rm_scheduler(data, schedule=True):
         try:
             scheduler.schedule()
         except ValueError:
+            logger.error(f'CAN NOT SCHEDULE TASKS DUE TO A TASK FAILURE!')
             return
 
 
