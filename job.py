@@ -69,6 +69,9 @@ class Job:
         if self.left_execution <= 0:
             logger.info(f'TASK {self.pk} ENDED')
 
+    def is_done(self):
+        return self.left_execution <= 0
+
     def __str__(self):
         """
         String representation of the job.

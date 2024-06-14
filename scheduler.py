@@ -2,6 +2,7 @@ import abc
 import logging
 import math
 import sys
+import time
 
 from job import Job
 from task import Task
@@ -104,8 +105,75 @@ class BaseScheduler(abc.ABC):
 
 
 class RMScheduler(BaseScheduler):
+    def utilization_lub(self):
+        n = len(self.tasks)
+        return n * (2 ** (1 / n) - 1)
+
+    @staticmethod
+    def get_arrived_jobs(sorted_jobs: list[Job], now: float):
+        arrived_jobs: list[Job] = []
+        for job in sorted_jobs:
+            if job.arrival > now:
+                break
+            arrived_jobs.append(job)
+        arrived_jobs.sort(key=lambda j: j.task.period)
+        return arrived_jobs
+
+    @staticmethod
+    def get_task_exec_time(queue: list[Job], job: Job, now: int) -> int:
+        """
+        Get the execution time for a job, considering higher priority jobs.
+
+        Args:
+            queue (list[Job]): The list of jobs.
+            job (Job): The current job to execute.
+            now (int): The current time.
+
+        Returns:
+            int: The execution time for the job.
+        """
+        high_priority_jobs: list[Job] = []
+        for j in queue:
+            if j.arrival < job.deadline and j.task.period < job.task.period and not j.is_done():
+                high_priority_jobs.append(j)
+        if high_priority_jobs:
+            next_job = min(high_priority_jobs, key=lambda _: _.arrival)
+            exec_time = min(next_job.arrival - now, job.left_execution)
+        else:
+            exec_time = job.left_execution
+        return exec_time
+
     def is_feasible(self) -> bool:
-        pass
+        utilization_sum = sum(task.utility for task in self.tasks)
+        if utilization_sum < self.utilization_lub():
+            logger.info('TASKS ARE SCHEDULABLE DUE TO LEAST UPPER BOUND!')
+            return True
+        elif utilization_sum >= 1:
+            logger.error('TASKS ARE NOT SCHEDULABLE!')
+            return False
+        logger.info('TASKS MIGHT BE SCHEDULABLE WITH RM SCHEDULER BUT NOT SURE!')
+        return True
 
     def schedule(self) -> None:
-        pass
+        hyper_period = self.get_hyper_period()
+        jobs = list(self.jobs)
+        jobs.sort(key=lambda j: j.arrival)
+
+        start_time = time.time()
+        while jobs:
+            now = time.time()
+            if round(now - start_time) > hyper_period:
+                raise ValueError
+            arrived_jobs = self.get_arrived_jobs(
+                jobs, round(now - start_time)
+            )
+            job = arrived_jobs.pop(0)
+            jobs.remove(job)
+
+            exec_time = self.get_task_exec_time(jobs, job, round(now - start_time))
+            logger.info(f'EXECUTING JOB {job.pk} FOR {exec_time}s...')
+            job.compute(exec_time)
+            if len(jobs) > 0:
+                if job.left_execution > 0:
+                    jobs.append(job)
+                    jobs = sorted(jobs, key=lambda j: j.arrival)

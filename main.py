@@ -35,14 +35,17 @@ def test_rm_scheduler(data, schedule=True):
     scheduler = RMScheduler(data)
     is_feasible = scheduler.is_feasible()
     if is_feasible:
-        logger.info('JOBS ARE FEASIBLE WITH RM ALGORITHM')
+        logger.info('JOBS MIGHT BE FEASIBLE WITH RM ALGORITHM')
     else:
         logger.error('JOBS ARE NOT FEASIBLE WITH RM ALGORITHM')
         return
 
     if schedule:
         logger.info('SCHEDULING IS BEING DONE...')
-        scheduler.schedule()
+        try:
+            scheduler.schedule()
+        except ValueError:
+            return
 
 
 def main():
