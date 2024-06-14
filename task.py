@@ -1,8 +1,5 @@
 import logging
 import sys
-import time
-
-from job import Job
 
 # Setup logging handlers for writing logs to a file and outputting to the console.
 handlers = [
@@ -21,65 +18,29 @@ logger = logging.getLogger()
 
 class Task:
     """
-    Class representing a Task derived from a Job.
-
-    Attributes:
-        job (Job): The job associated with the task.
-        left_execution (int): Remaining execution time for the task.
-        arrival (int): Arrival time of the task.
+    Class representing a Task with attributes such as computation time and period.
     """
-    def __init__(self, job: Job, arrival: int):
-        self.job = job
-        self.left_execution = self.job.computation
-        self.arrival = arrival
+    def __init__(self, pk: str, computation: int, period: int):
+        """
+        Initialize the task with given arguments.
+        Arguments:
+            pk (str): The primary key or ID of the task.
+            computation (int): The computation time required for the task.
+            period (int): The period of the task.
+        """
+        self.pk = pk
+        self.computation = computation
+        self.period = period
 
     @property
-    def pk(self):
+    def utility(self) -> float:
         """
-        Primary key for the task, combining job ID and arrival time.
+        Calculate the utility of the task.
 
         Returns:
-            str: The primary key.
+            float: The utility of the task.
         """
-        return f'{self.job.pk} | {self.arrival}'
-
-    @property
-    def deadline(self):
-        """
-        Calculate the deadline for the task based on its arrival and job's deadline.
-
-        Returns:
-            int: The deadline.
-        """
-        return self.arrival + self.job.deadline
-
-    def compute(self, exec_time: int):
-        """
-        Simulate the computation of the task for a given execution time.
-
-        Args:
-            exec_time (int): The time to run the task.
-        """
-        if self.left_execution <= 0:
-            return
-        if self.left_execution < exec_time:
-            logger.info(f'TASK {self.pk} RUNNING FOR {self.left_execution}s...')
-            time.sleep(self.left_execution)
-        else:
-            logger.info(f'TASK {self.pk} RUNNING FOR {exec_time}s...')
-            time.sleep(exec_time)
-        self.left_execution -= exec_time
-        if self.left_execution <= 0:
-            logger.info(f'TASK {self.pk} ENDED')
-
-    def is_done(self):
-        """
-        Check if the task is done.
-
-        Returns:
-            bool: True if the task has no remaining execution time, False otherwise.
-        """
-        return self.left_execution <= 0
+        return self.computation / self.period
 
     def __str__(self):
         """
@@ -88,4 +49,4 @@ class Task:
         Returns:
             str: The primary key of the task.
         """
-        return self.pk
+        return f'<T:{self.pk}>'

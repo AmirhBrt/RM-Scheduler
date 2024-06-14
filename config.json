@@ -1,20 +1,17 @@
 [
   {
     "id": "1",
-    "execution_time": 8,
-    "deadline": 15,
+    "exec_time": 8,
     "period": 20
   },
    {
     "id": "2",
-    "execution_time": 6,
-    "deadline": 12,
+    "exec_time": 6,
     "period": 15
   },
    {
     "id": "3",
-    "execution_time": 1,
-    "deadline": 8,
+    "exec_time": 1,
     "period": 10
   }
 ]
